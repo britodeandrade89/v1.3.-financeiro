@@ -76,18 +76,29 @@
         <div id="sidebarOverlay" class="sidebar-overlay"></div>
         <div id="sidebar" class="sidebar">
             <div class="sidebar-header">
-                <h2>Menu</h2>
+                <h2>Open Finance</h2>
                 <button id="closeSidebarBtn" class="action-btn">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
             </div>
             <div class="sidebar-content">
-                <div class="section">
-                    <div class="section-header"><h2 class="section-title">Contas</h2></div>
-                    <div id="bankAccountsList"></div>
-                    <div class="accounts-total"><span>Saldo Total</span><span id="accountsTotalValue">R$ 0,00</span></div>
-                    <div style="padding: 1.5rem;"><button id="add-account-btn" class="btn btn-secondary" style="width: 100%; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Adicionar Conta</button></div>
+                <div style="margin-bottom: 1.5rem;">
+                     <button id="add-account-btn" class="btn btn-secondary" style="width: 100%; justify-content: center; background-color: var(--surface); border: 1px dashed var(--primary);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Conectar Nova Conta
+                    </button>
                 </div>
+
+                <div class="section">
+                    <div class="section-header"><h2 class="section-title" style="color: var(--primary);">André</h2></div>
+                    <div id="bankAccountsListAndre"></div>
+                </div>
+                
+                <div class="section" style="margin-top: 1.5rem;">
+                    <div class="section-header"><h2 class="section-title" style="color: #ec4899;">Marcelly</h2></div>
+                    <div id="bankAccountsListMarcelly"></div>
+                </div>
+
                 <div class="section">
                     <div class="section-header"><h2 class="section-title">Sincronização na Nuvem</h2></div>
                     <div class="sync-config-section">
@@ -103,6 +114,23 @@
         <main id="main-content">
             <!-- HOME VIEW -->
             <div id="view-home" class="app-view active">
+                <!-- PATRIMÔNIO CARD (NEW) -->
+                <div class="info-cards-grid" style="margin-bottom: 1.5rem;">
+                    <div class="summary-card" style="background: linear-gradient(135deg, #f8fafc, #f1f5f9);">
+                        <div class="summary-header"><div class="summary-title" style="color: var(--text);">Patrimônio Total</div></div>
+                        <div class="stats-grid">
+                             <div class="stat-box">
+                                 <span class="stat-label" style="color: var(--primary);">André</span>
+                                 <span id="patrimonyAndre" class="stat-val text-light">R$ 0,00</span>
+                             </div>
+                             <div class="stat-box">
+                                 <span class="stat-label" style="color: #ec4899;">Marcelly</span>
+                                 <span id="patrimonyMarcelly" class="stat-val text-light">R$ 0,00</span>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="info-cards-grid">
                     <!-- SEÇÃO 1: SALÁRIO E DESPESAS GERAIS -->
                     <!-- 1. Entrada de Salários -->
@@ -277,10 +305,20 @@
             <div id="view-lancamentos" class="app-view">
                 <div class="section-header" style="margin-bottom: 1rem; justify-content: space-between;">
                     <h2 class="section-title">Lançamentos</h2>
-                    <button id="open-csv-btn" class="btn btn-secondary" style="padding: 0.5rem 0.8rem; font-size: 0.8rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                        Importar CSV
-                    </button>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
+                        <button id="ai-scan-btn" class="btn" style="padding: 0.5rem 0.8rem; font-size: 0.8rem; background-color: var(--primary-dark);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            IA: Extrato (PDF/Foto)
+                        </button>
+                        <button id="paste-text-btn" class="btn btn-secondary" style="padding: 0.5rem 0.8rem; font-size: 0.8rem;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                            Colar Texto
+                        </button>
+                        <button id="open-csv-btn" class="btn btn-secondary" style="padding: 0.5rem 0.8rem; font-size: 0.8rem;">
+                            CSV
+                        </button>
+                    </div>
+                    <input type="file" id="screenshotInput" accept="image/*,.pdf" style="display: none;">
                 </div>
 
                 <div class="segmented-control">
@@ -365,6 +403,35 @@
 
         </main>
 
+        <!-- LOADING OVERLAY -->
+        <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 3000; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+            <div class="loading-dots"><span></span><span></span><span></span></div>
+            <p style="margin-top: 1rem; font-weight: 600; color: var(--primary);">Processando com IA...</p>
+            <p style="font-size: 0.8rem; color: var(--text-light); max-width: 80%;">Lendo seu extrato ou imagem para extrair as transações.</p>
+        </div>
+
+        <!-- Text Paste Modal -->
+        <div id="textPasteModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title">Colar Texto do Extrato</h2>
+                    <button class="action-btn close-modal-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cole aqui o texto copiado do app do banco:</label>
+                    <textarea id="pastedTextInput" class="form-input" rows="8" placeholder="Ex: 
+30/01 Compra Mercado R$ 50,00
+31/01 Pix Recebido Maria R$ 100,00..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary close-modal-btn">Cancelar</button>
+                    <button type="button" id="processTextBtn" class="btn">Processar Texto</button>
+                </div>
+            </div>
+        </div>
+
         <!-- MODALS -->
         <!-- Add Item Modal -->
         <div id="addModal" class="modal">
@@ -405,7 +472,7 @@
                     </div>
                     
                     <div id="sourceAccountGroup" class="form-group">
-                        <label class="form-label" for="sourceAccount">Conta de Saída</label>
+                        <label class="form-label" for="sourceAccount">Conta de Saída (Open Finance)</label>
                         <select id="sourceAccount" name="sourceAccount" class="form-select"></select>
                     </div>
 
@@ -444,7 +511,7 @@
         <div id="csvImportModal" class="modal">
             <div class="modal-content" style="max-width: 700px;">
                 <div class="modal-header">
-                    <h2 class="modal-title">Importar Extrato Bancário (CSV)</h2>
+                    <h2 class="modal-title">Importar Extrato (Open Finance Manual)</h2>
                     <button class="action-btn close-modal-btn">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
@@ -453,7 +520,7 @@
                 <div class="file-upload-area" id="csvDropZone">
                     <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 0.5rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     <h3>Selecione o arquivo CSV</h3>
-                    <p>Clique aqui para buscar o arquivo do seu banco</p>
+                    <p>Baixe o extrato no site do seu banco e solte aqui</p>
                     <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
                 </div>
 
@@ -611,26 +678,60 @@
              </div>
         </div>
 
-        <!-- Account Modal -->
+        <!-- Account Modal (ENHANCED OPEN FINANCE) -->
         <div id="accountModal" class="modal">
              <div class="modal-content">
                  <div class="modal-header">
-                     <h2 id="accountModalTitle" class="modal-title">Conta Bancária</h2>
+                     <h2 id="accountModalTitle" class="modal-title">Conectar Conta (Open Finance)</h2>
                      <button class="action-btn close-modal-btn"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
                  </div>
                  <form id="accountForm">
                      <input type="hidden" id="accountId" name="accountId">
+                     
                      <div class="form-group">
-                         <label class="form-label" for="accountName">Nome da Conta</label>
-                         <input type="text" id="accountName" name="accountName" class="form-input" required placeholder="Ex: Nubank, Carteira">
+                         <label class="form-label" for="accountName">Nome da Instituição</label>
+                         <input type="text" id="accountName" name="accountName" class="form-input" required placeholder="Ex: Nubank, Itaú, Bradesco">
                      </div>
+
+                     <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="accountOwner">Titular</label>
+                            <select id="accountOwner" name="accountOwner" class="form-select" required>
+                                <option value="Andre">André</option>
+                                <option value="Marcelly">Marcelly</option>
+                                <option value="Conjunta">Conjunta</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="accountType">Tipo</label>
+                            <select id="accountType" name="accountType" class="form-select" required>
+                                <option value="corrente">Conta Corrente</option>
+                                <option value="poupanca">Poupança/Invest.</option>
+                                <option value="credito">Cartão de Crédito</option>
+                            </select>
+                        </div>
+                     </div>
+
                      <div class="form-group">
-                         <label class="form-label" for="accountBalance">Saldo Inicial (R$)</label>
+                         <label class="form-label" for="accountBalance">Saldo Atual (R$)</label>
                          <input type="text" id="accountBalance" name="accountBalance" class="form-input" required inputmode="decimal">
+                         <p style="font-size: 0.75rem; color: var(--text-light); margin-top: 2px;">Para cartões, insira o valor da fatura atual.</p>
                      </div>
+
+                     <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="accountLimit">Limite Total</label>
+                            <input type="text" id="accountLimit" name="accountLimit" class="form-input" placeholder="Opcional">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="accountDueDay">Dia Venc.</label>
+                            <input type="number" id="accountDueDay" name="accountDueDay" class="form-input" min="1" max="31" placeholder="Dia">
+                        </div>
+                     </div>
+
                      <div class="modal-footer">
                          <button type="button" class="btn btn-secondary close-modal-btn">Cancelar</button>
-                         <button type="submit" class="btn">Salvar</button>
+                         <button type="submit" class="btn">Salvar Conexão</button>
                      </div>
                  </form>
              </div>

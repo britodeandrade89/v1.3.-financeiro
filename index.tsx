@@ -78,15 +78,15 @@ const initialMonthData = {
     goals: [],
     savingsGoals: [],
     bankAccounts: [
-        { id: "acc_1", name: "Conta Principal", balance: 0.00 },
-        { id: "acc_2", name: "Poupança Viagem", balance: 0.00 },
+        { id: "acc_1", name: "Nubank (André)", balance: 0.00, owner: 'Andre', type: 'corrente' },
+        { id: "acc_2", name: "Nubank (Marcelly)", balance: 0.00, owner: 'Marcelly', type: 'corrente' },
     ]
 };
 
 // =================================================================================
 // STATE & AI INSTANCE
 // =================================================================================
-let ai = null;
+let ai = new GoogleGenAI({ apiKey: firebaseConfig.apiKey }); // Re-use firebase API Key for demo purposes or should be process.env.API_KEY
 let chat = null;
 let currentMonthData = JSON.parse(JSON.stringify(initialMonthData));
 let currentModalType = '';
@@ -159,6 +159,10 @@ const elements = {
     // Cards - Marcia Brito
     marciaTotalDisplay: document.getElementById('marciaTotalDisplay'),
     marciaTotalBill: document.getElementById('marciaTotalBill'),
+    
+    // Cards - Patrimony
+    patrimonyAndre: document.getElementById('patrimonyAndre'),
+    patrimonyMarcelly: document.getElementById('patrimonyMarcelly'),
 
     // Other
     debtSummaryContainer: document.getElementById('debtSummaryContainer'),
@@ -170,6 +174,8 @@ const elements = {
     avulsosList: document.getElementById('avulsosList'),
     goalsList: document.getElementById('goalsList'),
     bankAccountsList: document.getElementById('bankAccountsList'),
+    bankAccountsListAndre: document.getElementById('bankAccountsListAndre'),
+    bankAccountsListMarcelly: document.getElementById('bankAccountsListMarcelly'),
     overviewChart: document.getElementById('overviewChart'),
     monthlyAnalysisSection: document.getElementById('monthlyAnalysisSection'),
     appContainer: document.getElementById('app-container'),
@@ -221,7 +227,11 @@ const elements = {
     accountForm: document.getElementById('accountForm'),
     accountId: document.getElementById('accountId'),
     accountName: document.getElementById('accountName'),
+    accountOwner: document.getElementById('accountOwner'),
+    accountType: document.getElementById('accountType'),
     accountBalance: document.getElementById('accountBalance'),
+    accountLimit: document.getElementById('accountLimit'),
+    accountDueDay: document.getElementById('accountDueDay'),
     savingsGoalsList: document.getElementById('savingsGoalsList'),
     savingsGoalModalTitle: document.getElementById('savingsGoalModalTitle'),
     savingsGoalForm: document.getElementById('savingsGoalForm'),
@@ -244,6 +254,17 @@ const elements = {
     mapAmountCol: document.getElementById('mapAmountCol'),
     csvPreviewTable: document.getElementById('csvPreviewTable'),
     processCsvBtn: document.getElementById('processCsvBtn'),
+
+    // AI Scan Elements
+    aiScanBtn: document.getElementById('ai-scan-btn'),
+    screenshotInput: document.getElementById('screenshotInput'),
+    loadingOverlay: document.getElementById('loadingOverlay'),
+    
+    // Text Paste Elements
+    pasteTextBtn: document.getElementById('paste-text-btn'),
+    textPasteModal: document.getElementById('textPasteModal'),
+    pastedTextInput: document.getElementById('pastedTextInput'),
+    processTextBtn: document.getElementById('processTextBtn'),
 };
 
 function formatCurrency(value) {
@@ -325,7 +346,7 @@ function populateAccountSelects() {
             accounts.forEach(account => {
                 const option = document.createElement('option');
                 option.value = account.id;
-                option.textContent = account.name;
+                option.textContent = `${account.name} (${account.type === 'credito' ? 'Fatura' : 'Saldo'})`;
                 select.appendChild(option);
             });
         }
@@ -381,6 +402,12 @@ function updateLastSyncTime(success) {
             statusInfo.textContent = 'Salvo na nuvem: ' + new Date().toLocaleTimeString();
         } 
     }
+}
+
+function updateUI() {
+    updateSummary();
+    updateMonthDisplay();
+    updateSyncButtonState();
 }
 
 async function saveDataToFirestore() {
@@ -476,8 +503,15 @@ async function createNewMonthData() {
         savingsGoals: JSON.parse(JSON.stringify(baseData.savingsGoals || [])),
         bankAccounts: JSON.parse(JSON.stringify(baseData.bankAccounts || []))
     };
-    const mainAccount = newMonthData.bankAccounts.find(a => a.name === "Conta Principal");
-    if (mainAccount) mainAccount.balance = 0;
+    
+    // Ensure all accounts have default fields if missing
+    newMonthData.bankAccounts.forEach(acc => {
+        if (!acc.owner) acc.owner = 'Andre';
+        if (!acc.type) acc.type = 'corrente';
+        // Reset balances might be annoying if manual, but safer for new month? 
+        // Let's keep credit card balance as 0 (invoice paid) but keep savings?
+        // For simple logic, we keep balances as is, user updates manually.
+    });
 
     const paymentDate = PAYMENT_SCHEDULE_2025[currentMonth];
     if (paymentDate && currentYear === 2025) {
@@ -591,10 +625,7 @@ function updateSummary() {
     if (elements.salaryIncomeProgressBar) elements.salaryIncomeProgressBar.style.width = cashIncomesTotal > 0 ? `${(cashIncomesReceived / cashIncomesTotal) * 100}%` : '0%';
 
     // --- 2. DESPESAS GERAIS (Dinheiro) ---
-    // Exclui gastos mumbuca explicitamente para não duplicar
-    const cashExpenses = currentMonthData.expenses.filter(e => true); // Todos aqui são dinheiro, mumbuca é separado em "shoppingItems/avulsos"
-    
-    // Calcula totals
+    const cashExpenses = currentMonthData.expenses.filter(e => true); 
     const cashExpensesTotal = cashExpenses.reduce((acc, curr) => acc + curr.amount, 0);
     const cashExpensesPaid = cashExpenses.filter(e => e.paid).reduce((acc, curr) => acc + curr.amount, 0);
     const cashExpensesPending = cashExpensesTotal - cashExpensesPaid;
@@ -625,13 +656,6 @@ function updateSummary() {
 
     // --- 5. MUMBUCA (Gastos - Compras + Abastecimento) ---
     const mumbucaShopping = currentMonthData.shoppingItems || [];
-    const mumbucaAvulsos = currentMonthData.avulsosItems ? currentMonthData.avulsosItems.filter(i => i.description.toLowerCase().includes('mumbuca') || i.category === 'abastecimento_mumbuca') : [];
-    
-    // Nota: "Abastecimento" está separado na UI, mas aqui somamos tudo como "Saída Mumbuca"
-    // Vamos considerar "shoppingItems" (Compras) e "avulsos" (Abastecimento)
-    // No código original, "shoppingItems" é "Compras Mumbuca". "avulsosItems" é Avulsos.
-    // Vamos somar os dois arrays.
-    
     const allMumbucaExpenses = [...mumbucaShopping];
     const mumbucaExpensesTotal = allMumbucaExpenses.reduce((acc, curr) => acc + curr.amount, 0);
     const mumbucaExpensesPaid = allMumbucaExpenses.filter(e => e.paid).reduce((acc, curr) => acc + curr.amount, 0);
@@ -661,7 +685,6 @@ function updateSummary() {
         const desc = e.description ? e.description.toLowerCase() : '';
         return desc.includes('marcia') || desc.includes('márcia');
     });
-    
     const marciaTotal = marciaExpenses.reduce((acc, curr) => acc + curr.amount, 0);
     const marciaPaid = marciaExpenses.filter(e => e.paid).reduce((acc, curr) => acc + curr.amount, 0);
     const marciaPending = marciaTotal - marciaPaid;
@@ -670,67 +693,80 @@ function updateSummary() {
     if (elements.marciaTotalBill) elements.marciaTotalBill.textContent = formatCurrency(marciaTotal);
 
     // --- 9. RESUMO GERAL ---
-    // Total Entradas (Salário + Mumbuca + Avulsos de Entrada se houver)
-    const totalGeneralIncome = cashIncomesTotal + mumbucaTotal; // Simplificado
-    
-    // Total Saídas (Despesas Dinheiro + Gastos Mumbuca + Avulsos Saída)
+    const totalGeneralIncome = cashIncomesTotal + mumbucaTotal; 
     const avulsosExpenses = currentMonthData.avulsosItems || [];
     const avulsosTotal = avulsosExpenses.reduce((acc, curr) => acc + curr.amount, 0);
-    
     const totalGeneralExpenses = cashExpensesTotal + mumbucaExpensesTotal + avulsosTotal;
 
     if (elements.generalTotalIncome) elements.generalTotalIncome.textContent = formatCurrency(totalGeneralIncome).replace('R$', '').trim();
     if (elements.generalTotalExpenses) elements.generalTotalExpenses.textContent = formatCurrency(totalGeneralExpenses).replace('R$', '').trim();
     
+    // --- 10. PATRIMÔNIO POR PESSOA (NOVO) ---
+    const accounts = currentMonthData.bankAccounts || [];
+    let andreTotal = 0;
+    let marcellyTotal = 0;
+
+    accounts.forEach(acc => {
+        // Se for cartão de crédito, subtrai o valor (dívida da fatura). Se for conta, soma.
+        const val = acc.type === 'credito' ? -acc.balance : acc.balance;
+        if (acc.owner === 'Andre') andreTotal += val;
+        else if (acc.owner === 'Marcelly') marcellyTotal += val;
+        else {
+            // Conta Conjunta - Divide por 2
+            andreTotal += val / 2;
+            marcellyTotal += val / 2;
+        }
+    });
+
+    if (elements.patrimonyAndre) elements.patrimonyAndre.textContent = formatCurrency(andreTotal);
+    if (elements.patrimonyMarcelly) elements.patrimonyMarcelly.textContent = formatCurrency(marcellyTotal);
+
     renderLists();
 }
 
-function renderLists() {
-    renderList(elements.incomesList, currentMonthData.incomes, 'income');
-    renderList(elements.expensesList, currentMonthData.expenses, 'expense');
-    renderList(elements.comprasMumbucaList, currentMonthData.shoppingItems, 'shopping');
-    renderList(elements.abastecimentoMumbucaList, [], 'abastecimento'); // Placeholder if separated
-    renderList(elements.avulsosList, currentMonthData.avulsosItems, 'avulsos');
+function renderBankAccounts(container, ownerFilter) {
+    if (!container) return;
+    container.innerHTML = '';
     
-    // Goals
-    if (elements.goalsList) {
-        elements.goalsList.innerHTML = '';
-        currentMonthData.goals.forEach(goal => {
-             // Calculate spent for this category
-             let spent = 0;
-             const relevantExpenses = [...currentMonthData.expenses, ...(currentMonthData.avulsosItems || [])];
-             spent = relevantExpenses.filter(e => e.category === goal.category).reduce((acc, curr) => acc + curr.amount, 0);
-             
-             const percent = Math.min((spent / goal.amount) * 100, 100);
-             const statusClass = percent > 100 ? 'danger' : (percent > 80 ? 'warning' : 'safe');
-             
-             const div = document.createElement('div');
-             div.className = 'goal-card';
-             div.innerHTML = `
-                <div class="goal-card-header">
-                    <div class="goal-card-title">${SPENDING_CATEGORIES[goal.category]?.icon || ICONS.goal} ${SPENDING_CATEGORIES[goal.category]?.name || 'Meta'}</div>
-                </div>
-                <div class="goal-amounts">
-                    <span class="goal-spent-amount">${formatCurrency(spent)}</span>
-                    <span class="goal-total-amount"> de ${formatCurrency(goal.amount)}</span>
-                </div>
-                <div class="goal-progress-bar"><div class="goal-progress-bar-inner ${statusClass}" style="width: ${percent}%"></div></div>
-                <div class="goal-remaining ${percent > 100 ? 'over' : 'safe'}">${percent > 100 ? 'Excedido: ' : 'Resta: '}${formatCurrency(Math.abs(goal.amount - spent))}</div>
-             `;
-             elements.goalsList.appendChild(div);
-        });
+    const accounts = (currentMonthData.bankAccounts || []).filter(acc => acc.owner === ownerFilter || (ownerFilter === 'Andre' && acc.owner === 'Conjunta')); // Show joint for Andre by default or duplicate? Let's just strict filter
+    
+    if (accounts.length === 0) {
+        container.innerHTML = `<div style="text-align:center; font-size:0.8rem; color:var(--text-light); padding:0.5rem;">Nenhuma conta conectada.</div>`;
+        return;
     }
 
-    // Accounts
-    if (elements.bankAccountsList) {
-        elements.bankAccountsList.innerHTML = '';
-        currentMonthData.bankAccounts.forEach(acc => {
-             const div = document.createElement('div');
-             div.className = 'account-item';
-             div.innerHTML = `<span class="account-name">${acc.name}</span><span class="account-balance">${formatCurrency(acc.balance)}</span>`;
-             elements.bankAccountsList.appendChild(div);
-        });
-    }
+    accounts.forEach(acc => {
+         const div = document.createElement('div');
+         div.className = 'account-item';
+         div.onclick = () => openAccountModal(acc.id);
+         
+         let icon = ICONS.wallet; // Default
+         if (acc.type === 'credito') icon = ICONS.shopping;
+         else if (acc.type === 'poupanca') icon = ICONS.savings;
+
+         let balanceLabel = acc.type === 'credito' ? 'Fatura Atual' : 'Saldo';
+         let balanceColor = acc.type === 'credito' ? 'var(--danger)' : 'var(--success)';
+         let extraInfo = '';
+
+         if (acc.type === 'credito' && acc.limit) {
+             const available = parseFloat(acc.limit) - parseFloat(acc.balance);
+             extraInfo = `<div style="font-size:0.7rem; color:var(--text-light);">Disp: ${formatCurrency(available)}</div>`;
+         } else if (acc.dueDay) {
+             extraInfo = `<div style="font-size:0.7rem; color:var(--text-light);">Vence dia ${acc.dueDay}</div>`;
+         }
+
+         div.innerHTML = `
+            <div style="flex:1;">
+                <div class="account-name" style="font-size:0.9rem;">${acc.name}</div>
+                ${extraInfo}
+            </div>
+            <div style="text-align:right;">
+                <span class="account-balance" style="color:${balanceColor}; font-size:1rem;">${formatCurrency(acc.balance)}</span>
+                <div style="font-size:0.7rem; color:var(--text-light);">${balanceLabel}</div>
+            </div>
+         `;
+         container.appendChild(div);
+    });
 }
 
 function renderList(container, items, type) {
@@ -764,6 +800,20 @@ function renderList(container, items, type) {
         container.appendChild(div);
     });
 }
+
+window.openAccountModal = (id) => {
+    const acc = currentMonthData.bankAccounts.find(a => a.id === id);
+    if (!acc) return;
+    elements.accountId.value = acc.id;
+    elements.accountName.value = acc.name;
+    elements.accountBalance.value = formatCurrency(acc.balance).replace('R$', '').trim();
+    if(elements.accountOwner) elements.accountOwner.value = acc.owner || 'Andre';
+    if(elements.accountType) elements.accountType.value = acc.type || 'corrente';
+    if(elements.accountLimit) elements.accountLimit.value = acc.limit ? formatCurrency(acc.limit).replace('R$', '').trim() : '';
+    if(elements.accountDueDay) elements.accountDueDay.value = acc.dueDay || '';
+    
+    elements.accountModal.classList.add('active');
+};
 
 window.openEditModal = (id, type) => {
     let item = null;
@@ -980,16 +1030,150 @@ function importCSVData() {
     elements.csvPreviewSection.style.display = 'none';
 }
 
+// =================================================================================
+// AI SCREENSHOT & PDF READER FUNCTIONS
+// =================================================================================
+async function fileToGenerativePart(file) {
+    const base64EncodedDataPromise = new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(file);
+    });
+    return {
+        inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+    };
+}
 
-// =================================================================================
-// INIT & EVENT LISTENERS
-// =================================================================================
+async function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    elements.loadingOverlay.style.display = 'flex';
+
+    try {
+        const imagePart = await fileToGenerativePart(file);
+        
+        const prompt = `
+            Você é um assistente financeiro especialista. Analise este extrato bancário (pode ser imagem ou PDF).
+            Extraia todas as transações financeiras visíveis.
+            
+            Para cada transação, identifique:
+            1. Data (no formato YYYY-MM-DD, assuma o ano atual ${currentYear} se não estiver explícito).
+            2. Descrição (nome do estabelecimento ou tipo de transação).
+            3. Valor (número decimal positivo).
+            4. Tipo: "income" se for entrada/depósito/pix recebido/crédito, "expense" se for saída/compra/pix enviado/débito.
+            
+            Retorne APENAS um JSON válido no seguinte formato, sem markdown ou explicações adicionais:
+            [
+                { "date": "YYYY-MM-DD", "description": "...", "amount": 0.00, "type": "expense" }
+            ]
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: {
+                role: "user",
+                parts: [imagePart, { text: prompt }]
+            }
+        });
+
+        processAIResponse(response.text);
+
+    } catch (error) {
+        console.error("Erro na leitura do arquivo:", error);
+        alert("Erro ao processar o arquivo. Certifique-se de que é uma imagem ou PDF legível.");
+    } finally {
+        elements.loadingOverlay.style.display = 'none';
+        elements.screenshotInput.value = ''; // Reset
+    }
+}
+
+async function handleTextPaste() {
+    const text = elements.pastedTextInput.value.trim();
+    if (!text) return;
+
+    elements.textPasteModal.classList.remove('active');
+    elements.loadingOverlay.style.display = 'flex';
+
+    try {
+        const prompt = `
+            Analise o seguinte texto copiado de um extrato bancário.
+            Extraia as transações financeiras.
+            Texto:
+            "${text}"
+            
+            Para cada transação, identifique:
+            1. Data (no formato YYYY-MM-DD, assuma o ano atual ${currentYear} se não estiver explícito).
+            2. Descrição (nome do estabelecimento ou tipo de transação).
+            3. Valor (número decimal positivo).
+            4. Tipo: "income" se for entrada/depósito/pix recebido/crédito, "expense" se for saída/compra/pix enviado/débito.
+            
+            Retorne APENAS um JSON válido no seguinte formato, sem markdown:
+            [
+                { "date": "YYYY-MM-DD", "description": "...", "amount": 0.00, "type": "expense" }
+            ]
+        `;
+
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: { role: "user", parts: [{ text: prompt }] }
+        });
+
+        processAIResponse(response.text);
+
+    } catch (error) {
+        console.error("Erro na análise de texto:", error);
+        alert("Erro ao processar o texto.");
+    } finally {
+        elements.loadingOverlay.style.display = 'none';
+        elements.pastedTextInput.value = '';
+    }
+}
+
+function processAIResponse(responseText) {
+    try {
+        const jsonString = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const transactions = JSON.parse(jsonString);
+
+        if (transactions && transactions.length > 0) {
+            let count = 0;
+            transactions.forEach(t => {
+                const newItem = {
+                    id: `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    description: t.description,
+                    amount: Math.abs(t.amount),
+                    date: t.date,
+                    dueDate: t.date,
+                    paid: true, // Screenshots/Exports usually show processed transactions
+                    paidDate: t.date,
+                    category: 'outros', // Default
+                    type: 'variable'
+                };
+
+                if (t.type === 'income') {
+                    currentMonthData.incomes.push(newItem);
+                } else {
+                    currentMonthData.expenses.push(newItem);
+                }
+                count++;
+            });
+            saveData();
+            alert(`${count} transações identificadas e adicionadas! Verifique a lista para categorizá-las.`);
+        } else {
+            alert('Não foi possível identificar transações claras nos dados fornecidos.');
+        }
+    } catch (e) {
+        console.error("Erro ao fazer parse do JSON da IA:", e);
+        alert("A IA não retornou um formato válido. Tente novamente com uma imagem/texto mais claro.");
+    }
+}
+
 function init() {
     // Populate Selects
     populateCategorySelects();
     populateAccountSelects();
     
-    // Auth
+    // Auth logic ... (remains same)
     if (isConfigured && auth) {
          onAuthStateChanged(auth, (user) => {
              if (user) {
@@ -1010,12 +1194,12 @@ function init() {
         updateSyncButtonState();
     }
 
-    // Event Listeners
+    // Event Listeners ... (remains same)
     if (elements.menuBtn) elements.menuBtn.addEventListener('click', () => {
         elements.sidebar.classList.add('active');
         elements.sidebarOverlay.classList.add('active');
     });
-
+    
     if (elements.closeSidebarBtn) elements.closeSidebarBtn.addEventListener('click', () => {
         elements.sidebar.classList.remove('active');
         elements.sidebarOverlay.classList.remove('active');
@@ -1065,8 +1249,8 @@ function init() {
     });
 
     // Modals Open
-    document.getElementById('add-income-btn')?.addEventListener('click', () => { currentModalType = 'income'; elements.addModalTitle.textContent = 'Nova Entrada'; elements.typeGroup.style.display='none'; elements.addModal.classList.add('active'); });
-    document.getElementById('add-expense-btn')?.addEventListener('click', () => { currentModalType = 'expense'; elements.addModalTitle.textContent = 'Nova Despesa'; elements.typeGroup.style.display='block'; elements.addModal.classList.add('active'); });
+    document.getElementById('add-income-btn')?.addEventListener('click', () => { currentModalType = 'income'; elements.addModalTitle.textContent = 'Nova Entrada'; elements.typeGroup.style.display='none'; populateAccountSelects(); elements.addModal.classList.add('active'); });
+    document.getElementById('add-expense-btn')?.addEventListener('click', () => { currentModalType = 'expense'; elements.addModalTitle.textContent = 'Nova Despesa'; elements.typeGroup.style.display='block'; populateAccountSelects(); elements.addModal.classList.add('active'); });
     document.getElementById('add-compras-mumbuca-btn')?.addEventListener('click', () => { currentModalType = 'shopping'; elements.addModalTitle.textContent = 'Compra Mumbuca'; elements.typeGroup.style.display='none'; elements.addModal.classList.add('active'); });
     document.getElementById('add-avulso-btn')?.addEventListener('click', () => { currentModalType = 'avulsos'; elements.addModalTitle.textContent = 'Novo Avulso'; elements.typeGroup.style.display='none'; elements.addModal.classList.add('active'); });
     
@@ -1074,6 +1258,35 @@ function init() {
     document.getElementById('open-csv-btn')?.addEventListener('click', () => {
         elements.csvImportModal.classList.add('active');
     });
+
+    // Add Account Button (Sidebar)
+    document.getElementById('add-account-btn')?.addEventListener('click', () => {
+        elements.accountForm.reset();
+        elements.accountId.value = `acc_${Date.now()}`;
+        elements.accountModal.classList.add('active');
+    });
+
+    // AI Scan Button (Combined PDF/Image)
+    if (elements.aiScanBtn) {
+        elements.aiScanBtn.addEventListener('click', () => {
+            elements.screenshotInput.click();
+        });
+    }
+
+    if (elements.screenshotInput) {
+        elements.screenshotInput.addEventListener('change', handleFileUpload);
+    }
+
+    // Text Paste Button
+    if (elements.pasteTextBtn) {
+        elements.pasteTextBtn.addEventListener('click', () => {
+            elements.textPasteModal.classList.add('active');
+        });
+    }
+
+    if (elements.processTextBtn) {
+        elements.processTextBtn.addEventListener('click', handleTextPaste);
+    }
 
     // CSV File Handling
     if (elements.csvDropZone) {
@@ -1130,6 +1343,35 @@ function init() {
         saveData();
         e.target.reset();
         elements.addModal.classList.remove('active');
+    });
+    
+    // Account Form Submit
+    elements.accountForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = elements.accountId.value;
+        const balance = parseCurrency(elements.accountBalance.value);
+        const limit = elements.accountLimit.value ? parseCurrency(elements.accountLimit.value) : 0;
+        
+        const newAcc = {
+            id: id,
+            name: elements.accountName.value,
+            balance: balance,
+            owner: elements.accountOwner.value,
+            type: elements.accountType.value,
+            limit: limit,
+            dueDay: elements.accountDueDay.value
+        };
+
+        const index = currentMonthData.bankAccounts.findIndex(a => a.id === id);
+        if (index >= 0) {
+            currentMonthData.bankAccounts[index] = newAcc;
+        } else {
+            currentMonthData.bankAccounts.push(newAcc);
+        }
+        
+        saveData();
+        populateAccountSelects(); // Refresh dropdowns
+        elements.accountModal.classList.remove('active');
     });
     
     elements.editForm?.addEventListener('submit', (e) => {
